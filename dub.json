@@ -1,0 +1,10 @@
+{
+	"authors": [
+		"Robert burner Schadek"
+	],
+	"libs": ["jsonnet"],
+	"copyright": "Copyright © 2019, Symmetry Investments",
+	"description": "A binding to jsonnet for Dlang",
+	"license": "LGPL3",
+	"name": "jsonned"
+}

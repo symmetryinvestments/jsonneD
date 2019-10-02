@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/jsonned
+jsonned.so
+jsonned.dylib
+jsonned.dll
+jsonned.a
+jsonned.lib
+jsonned-test-*
+*.exe
+*.o
+*.obj
+*.lst
