@@ -445,6 +445,44 @@ struct JsonneD {
 	}
 }
 
+import std.stdio;
+import std.array : replace;
+import std.format : format;
+
+///
 unittest {
 	JsonneD jn = JsonneD();
+}
+
+///
+unittest {
+	JsonneD jn = JsonneD();
+	string s = `
+	{
+		person1: {
+			name: "Alice",
+			welcome: "Hello " + self.name + "!",
+		},
+		person2: self.person1 {
+			name: std.extVar("OTHER_NAME"),
+		},
+	}`;
+	jn.extVar("OTHER_NAME", "Robert Schadek");
+
+	auto rslt = jn.evaluateSnippet("foo.json", s);
+	string exp = `
+	{
+		"person1": {
+			"name": "Alice",
+			"welcome": "Hello Alice!"
+		},
+		"person2": {
+			"name": "Robert Schadek",
+			"welcome" : "Hello RobertSchadek!"
+		}
+	}`;
+	string rnw = rslt.rslt.get().replace(" ", "").replace("\t", "")
+		.replace("\n", "");
+	string xnw = exp.replace(" ", "").replace("\t", "").replace("\n", "");
+	assert(rnw == xnw, format("\nexp:\n%s\ngot\n%s", xnw, rnw));
 }
