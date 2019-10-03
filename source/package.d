@@ -141,18 +141,22 @@ struct JsonneD {
 
 		/** Add v to the end of the array.
 		 */
-		void arrayAppend(JsonnetValue v) {
+		void arrayAppend(ref JsonnetValue v) {
 			jsonnet_json_array_append(this.payload.vm.vm, this.payload.value,
 					v.payload.value);
+			pureFree(v.payload);
+			v.payload = null;
 		}
 
 		/** Add the field f to the object, bound to v.
 		 *
 		 * This replaces any previous binding of the field.
 		 */
-		void objectAppend(string f, JsonnetValue v) {
+		void objectAppend(string f, ref JsonnetValue v) {
 			jsonnet_json_object_append(this.payload.vm.vm, this.payload.value,
 					toStringz(f), v.payload.value);
+			pureFree(v.payload);
+			v.payload = null;
 		}
 	}
 
@@ -163,11 +167,48 @@ struct JsonneD {
 		return JsonnetValue(t, &this);
 	}
 
+	///
+	unittest {
+		string s = "Hello World";
+		JsonneD jd = JsonneD();
+		JsonnetValue sv = jd.makeString(s);
+		Nullable!string ss = sv.extractString();
+		assert(!ss.isNull());
+		assert(s == ss);
+	}
+
+	///
+	unittest {
+		string s = "Hello World";
+		JsonneD jd = JsonneD();
+		JsonnetValue copy;
+
+		{
+			JsonnetValue sv = jd.makeString(s);
+			copy = sv;
+		}
+
+		Nullable!string ss = copy.extractString();
+		assert(!ss.isNull());
+		assert(s == ss);
+	}
+
 	/** Convert the given double to a JsonnetJsonValue.
 	 */
 	JsonnetValue makeNumber(double v) {
 		JsonnetJsonValue* t = jsonnet_json_make_number(this.vm, v);
 		return JsonnetValue(t, &this);
+	}
+
+	///
+	unittest {
+		import std.math : approxEqual;
+		double s = 13.37;
+		JsonneD jd = JsonneD();
+		JsonnetValue sv = jd.makeNumber(s);
+		Nullable!double ss = sv.extractNumber();
+		assert(!ss.isNull());
+		assert(approxEqual(s, ss));
 	}
 
 	/** Convert the given bool (1 or 0) to a JsonnetJsonValue.
@@ -177,11 +218,30 @@ struct JsonneD {
 		return JsonnetValue(t, &this);
 	}
 
+	///
+	unittest {
+		JsonneD jd = JsonneD();
+		JsonnetValue sv = jd.makeBool(true);
+		assert(sv.extractBool());
+
+		sv = jd.makeBool(false);
+		assert(!sv.extractBool());
+	}
+
 	/** Make a JsonnetJsonValue representing null.
 	 */
 	JsonnetValue makeNull() {
 		JsonnetJsonValue* t = jsonnet_json_make_null(this.vm);
 		return JsonnetValue(t, &this);
+	}
+
+	///
+	unittest {
+		JsonneD jd = JsonneD();
+		JsonnetValue sv = jd.makeNull();
+		assert( sv.extractBool().isNull);
+		assert( sv.extractString().isNull);
+		assert(sv.extractNull());
 	}
 
 	/** Make a JsonnetJsonValue representing an array.
@@ -191,6 +251,17 @@ struct JsonneD {
 	JsonnetValue makeArray() {
 		JsonnetJsonValue* t = jsonnet_json_make_array(this.vm);
 		return JsonnetValue(t, &this);
+	}
+
+	///
+	unittest {
+		JsonneD jd = JsonneD();
+		JsonnetValue arr = jd.makeArray();
+
+		auto one = jd.makeNumber(1.0);
+		auto two = jd.makeNumber(2.0);
+		arr.arrayAppend(one);
+		arr.arrayAppend(two);
 	}
 
 	/** Make a JsonnetJsonValue representing an object with the given number of
@@ -456,6 +527,7 @@ unittest {
 
 ///
 unittest {
+	import std.json;
 	JsonneD jn = JsonneD();
 	string s = `
 	{
@@ -469,8 +541,8 @@ unittest {
 	}`;
 	jn.extVar("OTHER_NAME", "Robert Schadek");
 
-	auto rslt = jn.evaluateSnippet("foo.json", s);
-	string exp = `
+	auto eval = jn.evaluateSnippet("foo.json", s);
+	JSONValue exp = parseJSON(`
 	{
 		"person1": {
 			"name": "Alice",
@@ -478,11 +550,13 @@ unittest {
 		},
 		"person2": {
 			"name": "Robert Schadek",
-			"welcome" : "Hello RobertSchadek!"
+			"welcome" : "Hello Robert Schadek!"
 		}
-	}`;
-	string rnw = rslt.rslt.get().replace(" ", "").replace("\t", "")
-		.replace("\n", "");
-	string xnw = exp.replace(" ", "").replace("\t", "").replace("\n", "");
-	assert(rnw == xnw, format("\nexp:\n%s\ngot\n%s", xnw, rnw));
+	}`);
+
+	assert(!eval.rslt.isNull);
+	JSONValue r = parseJSON(eval.rslt.get());
+
+	assert(exp == r, format("\nexp:\n%s\neva:\n%s", exp.toPrettyString(),
+				r.toPrettyString()));
 }
