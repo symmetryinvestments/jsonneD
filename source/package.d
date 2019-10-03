@@ -140,8 +140,9 @@ struct JsonneD {
 		}
 
 		/** Add v to the end of the array.
-		 */
-		void arrayAppend(ref JsonnetValue v) {
+		* v is no longer valid after the append
+		*/
+		void arrayAppend()(auto ref JsonnetValue v) {
 			jsonnet_json_array_append(this.payload.vm.vm, this.payload.value,
 					v.payload.value);
 			pureFree(v.payload);
@@ -149,10 +150,11 @@ struct JsonneD {
 		}
 
 		/** Add the field f to the object, bound to v.
-		 *
-		 * This replaces any previous binding of the field.
-		 */
-		void objectAppend(string f, ref JsonnetValue v) {
+		*
+		* v is no longer valid after the append
+		* This replaces any previous binding of the field.
+		*/
+		void objectAppend()(string f, auto ref JsonnetValue v) {
 			jsonnet_json_object_append(this.payload.vm.vm, this.payload.value,
 					toStringz(f), v.payload.value);
 			pureFree(v.payload);
@@ -273,6 +275,15 @@ struct JsonneD {
 	JsonnetValue makeObject() {
 		JsonnetJsonValue* t = jsonnet_json_make_object(this.vm);
 		return JsonnetValue(t, &this);
+	}
+
+	///
+	unittest {
+		JsonneD jd = JsonneD();
+		JsonnetValue obj = jd.makeObject();
+		obj.objectAppend("foo", jd.makeString("Hello"));
+		obj.objectAppend("bar", jd.makeString("World"));
+		obj.objectAppend("args", jd.makeNumber(13.37));
 	}
 
 	/** Override the callback used to locate imports.
@@ -426,6 +437,17 @@ struct JsonneD {
 		import std.typecons : Yes;
 		import std.traits : Unqual;
 
+		void addPair(ref JsonnetInterleafedResult[] target, char* data,
+				size_t[2] idx, size_t i)
+		{
+			JsonnetResult e;
+			e.rslt = nullable(data[idx[1] .. i].idup);
+			JsonnetInterleafedResult t;
+			t.json = e;
+			t.filename = data[idx[0] .. idx[1] - 1].idup;
+			target ~= t;
+		}
+
 		scope(exit) {
 			jsonnet_realloc(this.vm, rslt, 0);
 		}
@@ -440,22 +462,21 @@ struct JsonneD {
 		} else {
 			size_t[2] s;
 			int idx;
-			for(size_t i = 0; !rslt[i .. i + 2].startsWith("\0\0"); ++i) {
+			size_t i;
+			for(i = 0; !rslt[i .. i + 2].startsWith("\0\0"); ++i) {
 				if(rslt[i] == '\0') {
 					if(idx == 0) {
 						s[1] = i + 1;
 					} else if(idx == 1) {
-						JsonnetResult e;
-						e.rslt = nullable(rslt[s[1] .. i].idup);
-						JsonnetInterleafedResult t;
-						t.json = e;
-						t.filename = rslt[s[0] .. s[1]].idup;
-						ret ~= t;
+						addPair(ret, rslt, s, i);
 
 						s[0] = i + 1;
 					}
 					idx = (idx + 1) % 2;
 				}
+			}
+			if(idx == 1) {
+				addPair(ret, rslt, s, i);
 			}
 		}
 		return ret;
@@ -527,6 +548,12 @@ unittest {
 
 ///
 unittest {
+	JsonneD jn = JsonneD();
+	auto r = jn.evaluateFile("tests/a0.jsonnet");
+}
+
+///
+unittest {
 	import std.json;
 	JsonneD jn = JsonneD();
 	string s = `
@@ -559,4 +586,37 @@ unittest {
 
 	assert(exp == r, format("\nexp:\n%s\neva:\n%s", exp.toPrettyString(),
 				r.toPrettyString()));
+}
+
+///
+unittest {
+	import std.json;
+	JsonneD jn = JsonneD();
+	auto rs = jn.evaluteFileMulti("tests/m0.jsonnnet");
+	assert(rs.length == 2, format("%s", rs.length));
+	assert(rs[0].filename == "a.json");
+	assert(rs[1].filename == "b.json");
+}
+
+///
+unittest {
+	import std.json;
+	string s = `
+{
+  "a.json": {
+    x: 1,
+    y: $["b.json"].y,
+  },
+  "b.json": {
+    x: $["a.json"].x,
+    y: 2,
+  },
+}
+	`;
+	JsonneD jn = JsonneD();
+
+	auto rs = jn.evaluteSnippetMulti("foo.json", s);
+	assert(rs.length == 2, format("%s", rs.length));
+	assert(rs[0].filename == "a.json");
+	assert(rs[1].filename == "b.json");
 }
