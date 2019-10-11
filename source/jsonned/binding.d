@@ -1,4 +1,4 @@
-module jsonnet.binding;
+module jsonned.binding;
 
 
         import core.stdc.config;
