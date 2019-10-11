@@ -224,10 +224,10 @@ struct JsonneD {
 	unittest {
 		JsonneD jd = JsonneD();
 		JsonnetValue sv = jd.makeBool(true);
-		assert(sv.extractBool());
+		assert(sv.extractBool().get());
 
 		sv = jd.makeBool(false);
-		assert(!sv.extractBool());
+		assert(!sv.extractBool().get());
 	}
 
 	/** Make a JsonnetJsonValue representing null.
