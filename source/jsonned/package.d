@@ -1,6 +1,6 @@
 module jsonned;
 
-import binding;
+import jsonned.binding;
 
 struct JsonneD {
 	import core.memory : pureFree, pureMalloc;
